@@ -1,0 +1,31 @@
+[project]
+name = "mcp-pkm-logseq"
+version = "0.1.0"
+description = "A MCP server for interacting with your Logseq Personal Knowledge Management system using custom instructions"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+ "mcp[cli]>=1.6.0",
+ "pytest>=8.3.5",
+ "requests>=2.32.3",
+ "requests-mock>=1.12.1",
+]
+[[project.authors]]
+name = "Ronie Uliana"
+email = "ronie.uliana@gmail.com"
+
+[build-system]
+requires = [ "hatchling",]
+build-backend = "hatchling.build"
+
+[project.scripts]
+mcp-pkm-logseq = "mcp_pkm_logseq:main"
+
+[tool.pytest.ini_options]
+testpaths = ["src"]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0.0",
+    "requests-mock>=1.12.0",
+]
