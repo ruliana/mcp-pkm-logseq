@@ -26,14 +26,44 @@ def start() -> str:
 
 @mcp.resource("logseq://page/{name}")
 def page(name: str) -> str:
-    """Get a page from Logseq"""
+    """Get a page from Logseq
+
+    Use this to get the content of a page.
+
+    Args:
+        name: The name of the page to get. Name is case-insensitive.
+
+    Returns:
+        A markdown formatted string containing the content of the page. Empty if the
+        page does not exist.
+    """
     return req("logseq.DB.q", f'(page "{name}")')
 
 
 @mcp.tool()
-def get_tagged_blocks(tag: str) -> str:
-    """Get all blocks with a given tag"""
-    return req("logseq.DB.q", f'[[{tag}]]')
+def get_tagged_blocks(*tags: list[str]) -> str:
+    """Get all blocks with any of the given tags.
+
+    Use this to find relavant information about a specific topic. A tag can also be a
+    page name, in which case all blocks that refer to that page are returned.
+
+    A "block", in Logseq, is an atomic unit of content. It can contain text, images,
+    checklists, code, and more.
+    
+    Args:
+        tags: A list of tags to search for. Tags are case-insensitive.
+
+    Returns:
+        A markdown formatted string containing the blocks with the given tags. Empty
+        if no blocks are found.
+    """
+    if len(tags) == 0:
+        return ""
+
+    if len(tags) == 1:
+        return req("logseq.DB.q", f'[[{tags[0]}]]')
+
+    return req("logseq.DB.q", f'[[{" OR ".join(tags)}]]')
 
 
 def req(method: str, *args: list) -> str:

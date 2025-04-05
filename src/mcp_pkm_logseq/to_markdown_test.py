@@ -166,19 +166,19 @@ def multiple_pages_response():
 
 @pytest.fixture
 def multiple_pages_output():
-    return """# First Page
-
-- A block from the first page
-- Another block from the first page
-
-
-# Second Page
+    return """# Second Page
 
 properties:
 - properties:: test
 - tag:: block
 
-- A block from the second page"""
+- A block from the second page
+
+
+# First Page
+
+- A block from the first page
+- Another block from the first page"""
 
 @pytest.fixture
 def example_output():
@@ -217,6 +217,74 @@ def test_end_to_end_multiple_pages(multiple_pages_response, multiple_pages_outpu
     # Test using the public API function
     markdown = page_to_markdown(multiple_pages_response)
     assert markdown.strip() == multiple_pages_output.strip()
+
+@pytest.fixture
+def pages_sorted_by_id_response():
+    return [
+        {
+            "content": "Block from page with id 1000",
+            "format": "markdown",
+            "id": 1001,
+            "left": {"id": 1000},
+            "page": {
+                "id": 1000,
+                "name": "low-id-page",
+                "originalName": "Low ID Page",
+            },
+            "parent": {"id": 1000},
+            "pathRefs": [{"id": 1000}],
+            "properties": {},
+            "uuid": "uuid-block-1000",
+        },
+        {
+            "content": "Block from page with id 2000",
+            "format": "markdown",
+            "id": 2001,
+            "left": {"id": 2000},
+            "page": {
+                "id": 2000,
+                "name": "medium-id-page",
+                "originalName": "Medium ID Page",
+            },
+            "parent": {"id": 2000},
+            "pathRefs": [{"id": 2000}],
+            "properties": {},
+            "uuid": "uuid-block-2000",
+        },
+        {
+            "content": "Block from page with id 3000",
+            "format": "markdown",
+            "id": 3001,
+            "left": {"id": 3000},
+            "page": {
+                "id": 3000,
+                "name": "high-id-page",
+                "originalName": "High ID Page",
+            },
+            "parent": {"id": 3000},
+            "pathRefs": [{"id": 3000}],
+            "properties": {},
+            "uuid": "uuid-block-3000",
+        }
+    ]
+
+def test_pages_sorted_by_id_reverse_order(pages_sorted_by_id_response):
+    """Test that pages are sorted by id in reverse order (larger ids first)."""
+    # Get the markdown
+    markdown = page_to_markdown(pages_sorted_by_id_response)
+    
+    # Check that High ID Page (id 3000) comes first, then Medium ID Page (id 2000), then Low ID Page (id 1000)
+    # We're using string positions to verify the order
+    high_pos = markdown.find("# High ID Page")
+    medium_pos = markdown.find("# Medium ID Page")
+    low_pos = markdown.find("# Low ID Page")
+    
+    assert high_pos != -1, "High ID Page not found in markdown"
+    assert medium_pos != -1, "Medium ID Page not found in markdown"
+    assert low_pos != -1, "Low ID Page not found in markdown"
+    
+    # Verify the order: high -> medium -> low
+    assert high_pos < medium_pos < low_pos, "Pages are not sorted by id in reverse order"
 
 # ============================================================================
 # clean_response Tests

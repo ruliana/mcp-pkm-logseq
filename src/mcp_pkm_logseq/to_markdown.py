@@ -40,7 +40,9 @@ def page_to_markdown(response: List[Dict[str, Any]]) -> str:
         response: The raw response from the Logseq API
         
     Returns:
-        A formatted Markdown string representation of the page(s)
+        A formatted Markdown string representation of the page(s). When multiple
+        pages are included in the response, they are sorted by page ID in reverse
+        order (larger IDs first), which places newer pages before older ones.
         
     Example:
         >>> api_response = get_logseq_page("My Page")
@@ -62,9 +64,11 @@ def page_to_markdown(response: List[Dict[str, Any]]) -> str:
     if len(pages) == 1:
         return build_markdown(pages[0], blocks)
     
-    # If there are multiple pages, convert each page to Markdown and join them
+    # If there are multiple pages, sort them by id in reverse order (larger ids first),
+    # which places newer pages before older ones, then convert each page to Markdown and join them
     results = []
-    for page in pages:
+    sorted_pages = sorted(pages, key=lambda p: p.id, reverse=True)
+    for page in sorted_pages:
         # Filter blocks for this page
         page_blocks = {
             block_id: block for block_id, block in blocks.items() 
