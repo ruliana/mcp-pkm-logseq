@@ -6,20 +6,20 @@ A MCP server for interacting with your Logseq Personal Knowledge Management syst
 
 ### Resources
 
-The server implements a simple note storage system with:
-- Custom note:// URI scheme for accessing individual notes
-- Each note resource has a name, description and text/plain mimetype
+- `logseq://start` - Initial instructions on how to interact with this knowledge base
+- `logseq://page/{name}` - Get a page from Logseq by name
 
 ### Tools
 
-The server implements one tool:
-- add-note: Adds a new note to the server
-  - Takes "name" and "content" as required string arguments
-  - Updates server state and notifies clients of resource changes
+- `get_tagged_blocks(*tags)` - Get all blocks with specified tags or page references
+
 
 ## Configuration
 
-[TODO: Add configuration details specific to your implementation]
+The following environment variables can be configured:
+
+- `LOGSEQ_API_KEY`: API key for authenticating with Logseq (default: "this-is-my-logseq-mcp-token")
+- `LOGSEQ_URL`: URL where the Logseq HTTP API is running (default: "http://localhost:12315")
 
 ## Quickstart
 
@@ -30,36 +30,39 @@ The server implements one tool:
 On MacOS: `~/Library/Application\ Support/Claude/claude_desktop_config.json`
 On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 
-<details>
-  <summary>Development/Unpublished Servers Configuration</summary>
-  ```
-  "mcpServers": {
-    "mcp-pkm-logseq": {
-      "command": "uv",
-      "args": [
-        "--directory",
-        "/Users/ronie/MCP/mcp-pkm-logseq",
-        "run",
-        "mcp-pkm-logseq"
-      ]
-    }
-  }
-  ```
-</details>
 
 <details>
   <summary>Published Servers Configuration</summary>
-  ```
+
+  ```json
   "mcpServers": {
     "mcp-pkm-logseq": {
       "command": "uvx",
       "args": [
         "mcp-pkm-logseq"
-      ]
+      ],
+      "env": {
+        "LOGSEQ_API_KEY": "your-logseq-api-token",
+        "LOGSEQ_URL": "http://localhost:12315"
+      }
     }
   }
   ```
 </details>
+
+### Start Logseq server
+
+Logseq's HTTP API is an interface that runs within your desktop Logseq application. When enabled, it starts a local HTTP server (default port 12315) that allows programmatic access to your Logseq knowledge base. The API supports querying pages and blocks, searching content, and potentially modifying content through authenticated requests.
+
+To enable the Logseq HTTP API server:
+
+1. Open Logseq and go to Settings (upper right corner)
+2. Navigate to Advanced
+3. Enable "Developer mode"
+4. Enable "HTTP API Server"
+5. Set your API token (this should match the `LOGSEQ_API_KEY` value in the MCP server configuration)
+
+For more detailed instructions, see: https://logseq-copilot.eindex.me/doc/setup
 
 ## Development
 
@@ -102,3 +105,23 @@ npx @modelcontextprotocol/inspector uv --directory /Users/ronie/MCP/mcp-pkm-logs
 
 
 Upon launching, the Inspector will display a URL that you can access in your browser to begin debugging.
+
+
+### Add Development Servers Configuration to Claude Desktop
+```json
+"mcpServers": {
+  "mcp-pkm-logseq": {
+    "command": "uv",
+    "args": [
+      "--directory",
+      "/<parent-directories>/mcp-pkm-logseq",
+      "run",
+      "mcp-pkm-logseq"
+    ],
+    "env": {
+      "LOGSEQ_API_KEY": "your-logseq-api-token",
+      "LOGSEQ_URL": "http://localhost:12315"
+    }
+  }
+}
+```

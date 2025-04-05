@@ -74,7 +74,7 @@ def req(method: str, *args: list) -> str:
 def request(method: str, *args: list) -> dict:
     """Make authenticated request to Logseq API."""
 
-    api_key = os.getenv("LOGSEQ_API_KEY", "this-is-my-logseq-mcp-token")
+    api_key = os.getenv("LOGSEQ_API_KEY")
     logseq_url = os.getenv("LOGSEQ_URL", "http://localhost:12315")
 
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
