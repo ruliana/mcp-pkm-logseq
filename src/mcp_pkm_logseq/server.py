@@ -4,7 +4,7 @@ from mcp.shared.exceptions import McpError, ErrorData
 from mcp.types import INTERNAL_ERROR, ErrorData
 from requests import post
 from requests.exceptions import HTTPError, RequestException
-from mcp_pkm_logseq.markdown_converter import page_to_markdown
+from mcp_pkm_logseq.to_markdown import page_to_markdown, clean_response
 
 from pprint import pprint
 
@@ -21,13 +21,24 @@ def add(a: int, b: int) -> int:
 @mcp.resource("logseq://start")
 def start() -> str:
     """Initial instructions on how to interact with this knowledge base. Before any other interaction, read this first."""
-    return request("logseq.Editor.getPage", "MCP PKM Logseq")
+    return req("logseq.DB.q", '(page "MCP PKM Logseq")')
 
 
 @mcp.resource("logseq://page/{name}")
 def page(name: str) -> str:
     """Get a page from Logseq"""
-    return request("logseq.Editor.getPage", name, True)
+    return req("logseq.DB.q", f'(page "{name}")')
+
+
+@mcp.tool()
+def get_tagged_blocks(tag: str) -> str:
+    """Get all blocks with a given tag"""
+    return req("logseq.DB.q", f'[[{tag}]]')
+
+
+def req(method: str, *args: list) -> str:
+    """Make authenticated request to Logseq API and convert the response to markdown."""
+    return page_to_markdown(request(method, *args))
 
 
 def request(method: str, *args: list) -> dict:
@@ -55,12 +66,6 @@ def request(method: str, *args: list) -> dict:
         )
 
 
-if __name__ == "__main__":
-    # rslt = request("logseq.Editor.getPage", "MCP PKM Logseq")
-    # print(rslt)
-    # print("=" * 100)
-    rslt = request("logseq.DB.q", "[[MCP PKM Logseq]]")
-    pprint(rslt)
-    print("=" * 100)
-    rslt = page_to_markdown(rslt)
-    print(rslt)
+# if __name__ == "__main__":
+#     rslt = get_tagged_blocks("query")
+#     print(rslt)

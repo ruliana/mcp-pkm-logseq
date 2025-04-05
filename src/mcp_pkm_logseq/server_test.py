@@ -33,7 +33,7 @@ def test_request_success(mock_env_vars, requests_mock):
         "method": "logseq.Editor.getPage",
         "args": ["test-page"]
     }
-    assert result == '{"result": "test page content"}'
+    assert result == {"result": "test page content"}
 
 
 def test_request_unauthorized(mock_env_vars, requests_mock):

@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Tuple, List
+from typing import Dict, Optional, Tuple, List, Any, Set
 
 @dataclass
 class Page:
@@ -22,21 +22,68 @@ class Block:
     parent_id: int
     # ID of the block that appears before this one in the same level
     left_id: int
+    # ID of the page this block belongs to
+    page_id: int
     # Optional dictionary containing block properties like aliases, tags, etc.
     properties: Optional[Dict] = None
     # List of child blocks
     children: List['Block'] = field(default_factory=list)
-
-def clean_response(response: List[dict]) -> Tuple[Page, Dict[int, Block]]:
+    
+def page_to_markdown(response: List[Dict[str, Any]]) -> str:
     """
-    Convert the Logseq API response into a Page object and a dictionary of Block objects.
+    Convert a Logseq API response to Markdown.
+    
+    This is the main entry point for converting Logseq pages to Markdown.
+    It acts as a facade for the underlying conversion process.
+    
+    Args:
+        response: The raw response from the Logseq API
+        
+    Returns:
+        A formatted Markdown string representation of the page(s)
+        
+    Example:
+        >>> api_response = get_logseq_page("My Page")
+        >>> markdown = page_to_markdown(api_response)
+        >>> print(markdown)
+        # My Page
+        
+        - Block 1
+          - Nested block
+        - Block 2
+    """
+    if not response:
+        return ""
+
+    # Process the response into our data model
+    pages, blocks = clean_response(response)
+    
+    # If there's only one page, convert it to Markdown
+    if len(pages) == 1:
+        return build_markdown(pages[0], blocks)
+    
+    # If there are multiple pages, convert each page to Markdown and join them
+    results = []
+    for page in pages:
+        # Filter blocks for this page
+        page_blocks = {
+            block_id: block for block_id, block in blocks.items() 
+            if block.page_id == page.id
+        }
+        results.append(build_markdown(page, page_blocks))
+    
+    return "\n\n".join(results)
+
+def clean_response(response: List[dict]) -> Tuple[List[Page], Dict[int, Block]]:
+    """
+    Convert the Logseq API response into Page objects and a dictionary of Block objects.
     
     Args:
         response: List of dictionaries from the Logseq API response
         
     Returns:
         A tuple containing:
-        - Page object with the page metadata
+        - List of Page objects with page metadata
         - Dictionary mapping block IDs to Block objects
         
     Raises:
@@ -46,27 +93,45 @@ def clean_response(response: List[dict]) -> Tuple[Page, Dict[int, Block]]:
     if not response:
         raise IndexError("Empty response")
     
-    # Extract page information from the first block
-    page_data = response[0]["page"]
-    page = Page(
-        id=page_data["id"],
-        name=page_data["name"],
-        original_name=page_data["originalName"]
-    )
+    # Group blocks by page ID and create Page objects
+    pages_dict = {}
+    
+    for block_data in response:
+        page_data = block_data["page"]
+        page_id = page_data["id"]
+        
+        # Create Page object if we haven't seen this page before
+        if page_id not in pages_dict:
+            pages_dict[page_id] = Page(
+                id=page_id,
+                name=page_data["name"],
+                original_name=page_data["originalName"]
+            )
     
     # Convert each block into a Block object
     blocks = {}
     for block_data in response:
+        page_id = block_data["page"]["id"]
         block = Block(
             id=block_data["id"],
             content=block_data["content"],
             parent_id=block_data["parent"]["id"],
             left_id=block_data["left"]["id"],
+            page_id=page_id,
             properties=block_data.get("properties", {})
         )
         blocks[block.id] = block
     
-    return page, blocks 
+    # Convert pages dictionary to list, ordered by appearance in response
+    seen_page_ids = []
+    for block_data in response:
+        page_id = block_data["page"]["id"]
+        if page_id not in seen_page_ids:
+            seen_page_ids.append(page_id)
+    
+    pages = [pages_dict[page_id] for page_id in seen_page_ids]
+    
+    return pages, blocks 
 
 def extract_properties(blocks: Dict[int, Block]) -> Tuple[List[str], Dict[int, Block]]:
     """
