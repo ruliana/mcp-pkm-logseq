@@ -6,11 +6,12 @@ A MCP server for interacting with your Logseq Personal Knowledge Management syst
 
 ### Resources
 
-- `logseq://guide` - Initial instructions on how to interact with this knowledge base
+- `logseq://start` - Initial instructions on how to interact with this knowledge base
+- `logseq://page/{name}` - Get a page from Logseq by name
 
 ### Tools
 
-- `personal_notes(topics: list[str])` - Retrieve personal notes from Logseq about specific topics
+- `get_tagged_blocks(*tags)` - Get all blocks with specified tags or page references
 
 
 ## Configuration
@@ -24,7 +25,7 @@ The following environment variables can be configured:
 
 ### Install
 
-#### Claude Desktop
+#### Claude Desktop and Cursor
 
 On MacOS: `~/Library/Application\ Support/Claude/claude_desktop_config.json`
 On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
@@ -48,6 +49,12 @@ On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
   }
   ```
 </details>
+
+#### Claude Code
+
+```bash
+claude mcp add mcp-pkm-logseq uvx mcp-pkm-logseq
+```
 
 ### Start Logseq server
 
