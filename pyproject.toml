@@ -1,14 +1,12 @@
 [project]
 name = "mcp-pkm-logseq"
-version = "0.2.0"
+version = "0.2.1"
 description = "A MCP server for interacting with your Logseq Personal Knowledge Management system using custom instructions"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
  "mcp[cli]>=1.6.0",
- "pytest>=8.3.5",
  "requests>=2.32.3",
- "requests-mock>=1.12.1",
 ]
 [[project.authors]]
 name = "Ronie Uliana"
@@ -26,6 +24,6 @@ testpaths = ["src"]
 
 [project.optional-dependencies]
 test = [
-    "pytest>=8.0.0",
-    "requests-mock>=1.12.0",
+    "pytest>=8.0.0,<9.0.0",
+    "requests-mock>=1.12.0,<2.0.0",
 ]
