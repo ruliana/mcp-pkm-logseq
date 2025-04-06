@@ -192,13 +192,11 @@ cli = [
 
 [[package]]
 name = "mcp-pkm-logseq"
-version = "0.1.1"
+version = "0.2.2"
 source = { editable = "." }
 dependencies = [
     { name = "mcp", extra = ["cli"] },
-    { name = "pytest" },
     { name = "requests" },
-    { name = "requests-mock" },
 ]
 
 [package.optional-dependencies]
@@ -210,11 +208,9 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "mcp", extras = ["cli"], specifier = ">=1.6.0" },
-    { name = "pytest", specifier = ">=8.3.5" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0.0" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0.0,<9.0.0" },
     { name = "requests", specifier = ">=2.32.3" },
-    { name = "requests-mock", specifier = ">=1.12.1" },
-    { name = "requests-mock", marker = "extra == 'test'", specifier = ">=1.12.0" },
+    { name = "requests-mock", marker = "extra == 'test'", specifier = ">=1.12.0,<2.0.0" },
 ]
 
 [[package]]

@@ -5,6 +5,11 @@ build/
 dist/
 wheels/
 *.egg-info
+.pytest_cache/
 
 # Virtual environments
 .venv
+
+# Agents and AIs
+.cursor/
+agent_todo.md

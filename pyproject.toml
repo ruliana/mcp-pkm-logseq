@@ -1,6 +1,6 @@
 [project]
 name = "mcp-pkm-logseq"
-version = "0.2.1"
+version = "0.2.2"
 description = "A MCP server for interacting with your Logseq Personal Knowledge Management system using custom instructions"
 readme = "README.md"
 requires-python = ">=3.12"

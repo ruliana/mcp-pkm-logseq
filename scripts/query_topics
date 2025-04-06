@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+
+import argparse
+import pprint
+import sys
+import os
+from typing import List
+
+# Add parent directory to path so we can import the package
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(script_dir)
+sys.path.insert(0, project_root)
+
+from src.mcp_pkm_logseq.request import request
+from src.mcp_pkm_logseq.to_markdown import page_to_markdown
+
+
+def search_topics(topics: List[str]) -> tuple[dict, str]:
+    """
+    Search for topics in Logseq and return both raw and markdown results.
+    
+    Args:
+        topics: A list of topics to search for
+        
+    Returns:
+        A tuple containing (raw_response, markdown_response)
+    """
+    # Format topics for search similar to server.py
+    if not topics:
+        raw_response = request("logseq.DB.q", '(page "MCP PKM Logseq")')
+        markdown_response = page_to_markdown(raw_response)
+        return raw_response, markdown_response
+    
+    # Try tag search first
+    formatted_topics = [f'[[{topic}]]' for topic in topics]
+    formatted_topics_str = " ".join(formatted_topics)
+    raw_response = request("logseq.DB.q", f'(or {formatted_topics_str})')
+    
+    # If no results found, try text search
+    if not raw_response:
+        formatted_topics = [f'"{topic}"' for topic in topics]
+        formatted_topics_str = " ".join(formatted_topics)
+        raw_response = request("logseq.DB.q", f'(or {formatted_topics_str})')
+    
+    markdown_response = page_to_markdown(raw_response)
+    return raw_response, markdown_response
+
+
+def main() -> None:
+    """CLI entry point for topic search."""
+    parser = argparse.ArgumentParser(
+        description="Search for topics in Logseq and display raw and markdown results"
+    )
+    parser.add_argument(
+        "topics", 
+        nargs="*", 
+        help="Topics to search for (leave empty to get guide)"
+    )
+    
+    args = parser.parse_args()
+    
+    try:
+        raw_response, markdown_response = search_topics(args.topics)
+        
+        print("=" * 80)
+        print("RAW RESPONSE:")
+        print("=" * 80)
+        pp = pprint.PrettyPrinter(indent=2)
+        pp.pprint(raw_response)
+        
+        print("\n" + "=" * 80)
+        print("MARKDOWN RESPONSE:")
+        print("=" * 80)
+        print(markdown_response)
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        exit(1)
+
+
+if __name__ == "__main__":
+    main()
