@@ -1,4 +1,5 @@
 import os
+import asyncio
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.exceptions import McpError, ErrorData
 from mcp.types import INTERNAL_ERROR, ErrorData
@@ -6,64 +7,59 @@ from requests import post
 from requests.exceptions import HTTPError, RequestException
 from mcp_pkm_logseq.to_markdown import page_to_markdown, clean_response
 
-from pprint import pprint
-
 
 mcp = FastMCP("MCP PKM Logseq")
 
 
-@mcp.tool()
-def add(a: int, b: int) -> int:
-    """Add two numbers"""
-    return a + b
+def main() -> None:
+    """Start the MCP server."""
+    mcp.run()
 
 
-@mcp.resource("logseq://start")
-def start() -> str:
+@mcp.resource("logseq://guide")
+def guide() -> str:
     """Initial instructions on how to interact with this knowledge base. Before any other interaction, read this first."""
     return req("logseq.DB.q", '(page "MCP PKM Logseq")')
 
 
-@mcp.resource("logseq://page/{name}")
-def page(name: str) -> str:
-    """Get a page from Logseq
-
-    Use this to get the content of a page.
-
-    Args:
-        name: The name of the page to get. Name is case-insensitive.
-
-    Returns:
-        A markdown formatted string containing the content of the page. Empty if the
-        page does not exist.
-    """
-    return req("logseq.DB.q", f'(page "{name}")')
-
-
 @mcp.tool()
-def get_tagged_blocks(*tags: list[str]) -> str:
-    """Get all blocks with any of the given tags.
+def personal_notes(topics: list[str]) -> str:
+    """Retrieve personal notes from Logseq.
 
-    Use this to find relavant information about a specific topic. A tag can also be a
-    page name, in which case all blocks that refer to that page are returned.
+    Use this to find relavant information about a specific topic or about user preferences.
+    It will return all information that is tagged with the topics from the user's personal
+    knowledge base.
 
-    A "block", in Logseq, is an atomic unit of content. It can contain text, images,
-    checklists, code, and more.
-    
+    The information is returned in markdown format, each item in the list is a separate
+    unit of information. Hierachical information is returned as a nested list.
+
+    The returning markdown contains text in double square brackets, like this:
+    `[[topic]]`. These are links to other topics, you can follow them to get more
+    information.
+
     Args:
-        tags: A list of tags to search for. Tags are case-insensitive.
+        topics: A list of topics to search for. Topics are case-insensitive. If no topic
+        is provided, the tool will return the guide on how to use the personal knowledge
+        base.
 
     Returns:
-        A markdown formatted string containing the blocks with the given tags. Empty
-        if no blocks are found.
+        A markdown formatted string containing the information with the given topics.
+        Empty if no information is found.
     """
-    if len(tags) == 0:
-        return ""
+    if len(topics) > 0:
+        formatted_topics = [f'[[{topic}]]' for topic in topics]
+        formatted_topics = " ".join(formatted_topics)
+        rslt = req("logseq.DB.q", f'(or {formatted_topics})')
 
-    if len(tags) == 1:
-        return req("logseq.DB.q", f'[[{tags[0]}]]')
+        # If the topic is not found by tag, try to find via full text search.
+        if rslt == "":
+            formatted_topics = [f'"{topic}"' for topic in topics]
+            formatted_topics = " ".join(formatted_topics)
+            rslt = req("logseq.DB.q", f'(or {formatted_topics})')
 
-    return req("logseq.DB.q", f'[[{" OR ".join(tags)}]]')
+        return rslt
+
+    return guide()
 
 
 def req(method: str, *args: list) -> str:
@@ -96,6 +92,6 @@ def request(method: str, *args: list) -> dict:
         )
 
 
-# if __name__ == "__main__":
-#     rslt = get_tagged_blocks("query")
-#     print(rslt)
+if __name__ == "__main__":
+    rslt = personal_notes(["Neo4j"])
+    print(rslt)

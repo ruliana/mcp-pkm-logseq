@@ -6,12 +6,11 @@ A MCP server for interacting with your Logseq Personal Knowledge Management syst
 
 ### Resources
 
-- `logseq://start` - Initial instructions on how to interact with this knowledge base
-- `logseq://page/{name}` - Get a page from Logseq by name
+- `logseq://guide` - Initial instructions on how to interact with this knowledge base
 
 ### Tools
 
-- `get_tagged_blocks(*tags)` - Get all blocks with specified tags or page references
+- `personal_notes(topics: list[str])` - Retrieve personal notes from Logseq about specific topics
 
 
 ## Configuration
