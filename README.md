@@ -10,7 +10,9 @@ A MCP server for interacting with your Logseq Personal Knowledge Management syst
 
 ### Tools
 
-- `personal_notes(topics)` - Retrieve personal notes from Logseq that are tagged with the specified topics
+- `get_personal_notes_instructions()` - Get instructions on how to use the personal notes tool
+- `get_personal_notes(topics, from_date, to_date)` - Retrieve personal notes from Logseq that are tagged with the specified topics
+- `get_todo_list(done, from_date, to_date)` - Retrieve the todo list from Logseq
 
 ## Configuration
 
@@ -40,7 +42,7 @@ On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
         "mcp-pkm-logseq"
       ],
       "env": {
-        "LOGSEQ_API_KEY": "your-logseq-api-token",
+        "LOGSEQ_API_TOKEN": "your-logseq-api-token",
         "LOGSEQ_URL": "http://localhost:12315"
       }
     }
@@ -67,6 +69,20 @@ To enable the Logseq HTTP API server:
 5. Set your API token (this should match the `LOGSEQ_API_KEY` value in the MCP server configuration)
 
 For more detailed instructions, see: https://logseq-copilot.eindex.me/doc/setup
+
+### Create MCP PKM Logseq Page
+
+Create a page named "MCP PKM Logseq" in your Logseq graph to serve as the guide for AI assistants. Add the following content:
+
+- Description of your tagging system (e.g., which tags represent projects, areas, resources)
+- List of frequently used tags and what topics they cover
+- Common workflows you use to organize information
+- Naming conventions for pages and blocks
+- Instructions on how you prefer information to be retrieved
+- Examples of useful topic combinations for searching
+- Any context about your personal knowledge management approach
+
+This page will be displayed whenever the AI thinks it needs to understand the user.
 
 ## Development
 
@@ -123,7 +139,7 @@ Upon launching, the Inspector will display a URL that you can access in your bro
       "mcp-pkm-logseq"
     ],
     "env": {
-      "LOGSEQ_API_KEY": "your-logseq-api-token",
+      "LOGSEQ_API_TOKEN": "your-logseq-api-token",
       "LOGSEQ_URL": "http://localhost:12315"
     }
   }

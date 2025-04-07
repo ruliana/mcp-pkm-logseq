@@ -8,7 +8,12 @@ from mcp.types import INTERNAL_ERROR, ErrorData
 def request(method: str, *args: list) -> dict:
     """Make authenticated request to Logseq API."""
 
-    api_key = os.getenv("LOGSEQ_API_KEY")
+    api_key = os.getenv("LOGSEQ_API_TOKEN")
+    if not api_key:
+        api_key = os.getenv("LOGSEQ_API_KEY")
+    if not api_key:
+        raise McpError(ErrorData(code=INTERNAL_ERROR, message="No API token found. Add it to your environment variables using LOGSEQ_API_TOKEN"))
+
     logseq_url = os.getenv("LOGSEQ_URL", "http://localhost:12315")
 
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
