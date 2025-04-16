@@ -57,7 +57,7 @@ def example_response():
             },
             "parent": {"id": 8644},
             "pathRefs": [{"id": 766}, {"id": 3622}, {"id": 8644}, {"id": 8649}],
-            "preBlock?": True,
+            "preBlock?": True,  # This indicates it's a page-level property block
             "properties": {"alias": ["mcp_logseq_start"], "author": ["Ronie Uliana"]},
             "propertiesOrder": ["alias", "author"],
             "propertiesTextValues": {
@@ -160,6 +160,7 @@ def multiple_pages_response():
             "parent": {"id": 2000},
             "pathRefs": [{"id": 2000}],
             "properties": {"properties": ["test"], "tag": ["block"]},
+            "preBlock?": True,  # Mark as page property
             "uuid": "uuid-block-second-page-2",
         },
     ]
@@ -217,6 +218,71 @@ def test_end_to_end_multiple_pages(multiple_pages_response, multiple_pages_outpu
     # Test using the public API function
     markdown = page_to_markdown(multiple_pages_response)
     assert markdown.strip() == multiple_pages_output.strip()
+
+@pytest.fixture
+def block_with_properties_response():
+    return [
+        {
+            "content": "Block with properties and content",
+            "format": "markdown",
+            "id": 1001,
+            "left": {"id": 1000},
+            "page": {
+                "id": 1000,
+                "name": "block-properties",
+                "originalName": "Block Properties",
+            },
+            "parent": {"id": 1000},
+            "pathRefs": [{"id": 1000}],
+            "properties": {"status": ["active"], "priority": ["high"]},
+            "uuid": "uuid-block-with-properties",
+        },
+        {
+            "content": "Child block",
+            "format": "markdown",
+            "id": 1002,
+            "left": {"id": 1001},
+            "page": {
+                "id": 1000,
+                "name": "block-properties",
+                "originalName": "Block Properties",
+            },
+            "parent": {"id": 1001}, # Parent is the block with properties
+            "pathRefs": [{"id": 1000}],
+            "properties": {},
+            "uuid": "uuid-child-block",
+        },
+        {
+            "content": "Another block with properties",
+            "format": "markdown",
+            "id": 1003,
+            "left": {"id": 1002},
+            "page": {
+                "id": 1000,
+                "name": "block-properties",
+                "originalName": "Block Properties",
+            },
+            "parent": {"id": 1000},
+            "pathRefs": [{"id": 1000}],
+            "properties": {"tags": ["example", "test"]},
+            "uuid": "uuid-another-block-with-properties",
+        }
+    ]
+
+@pytest.fixture
+def block_with_properties_output():
+    return """# Block Properties
+
+- Block with properties and content
+  properties: status:: active, priority:: high
+  - Child block
+- Another block with properties
+  properties: tags:: example, test"""
+
+def test_block_level_properties(block_with_properties_response, block_with_properties_output):
+    """Test that block-level properties are preserved and displayed correctly."""
+    markdown = page_to_markdown(block_with_properties_response)
+    assert markdown.strip() == block_with_properties_output.strip()
 
 @pytest.fixture
 def pages_sorted_by_id_response():
@@ -378,6 +444,7 @@ def test_extract_properties():
             left_id=1,
             page_id=0,
             properties={"alias": ["test"], "author": ["Ronie Uliana", "John Doe"]},
+            is_page_property=True,  # Mark as page property
         ),
         3: Block(id=4, content="Another regular block", parent_id=0, left_id=2, page_id=0),
     }
@@ -708,7 +775,15 @@ def test_build_markdown():
         1: Block(id=1, content="Root block", parent_id=0, left_id=4, page_id=0),
         2: Block(id=2, content="Child 1", parent_id=1, left_id=1, page_id=0),
         3: Block(id=3, content="Child 2", parent_id=1, left_id=2, page_id=0),
-        4: Block(id=4, content="alias:: test\nauthor:: [[Ronie Uliana]]", parent_id=0, left_id=0, page_id=0, properties={"alias": ["test"], "author": ["Ronie Uliana"]}),
+        4: Block(
+            id=4, 
+            content="alias:: test\nauthor:: [[Ronie Uliana]]", 
+            parent_id=0, 
+            left_id=0, 
+            page_id=0, 
+            properties={"alias": ["test"], "author": ["Ronie Uliana"]},
+            is_page_property=True,  # Mark as page property
+        ),
     }
 
     expected = """# Test Page

@@ -26,6 +26,8 @@ class Block:
     page_id: int
     # Optional dictionary containing block properties like aliases, tags, etc.
     properties: Optional[Dict] = None
+    # Flag indicating if this block is a page-level property block (preBlock?)
+    is_page_property: bool = False
     # List of child blocks
     children: List['Block'] = field(default_factory=list)
     
@@ -116,13 +118,15 @@ def clean_response(response: List[dict]) -> Tuple[List[Page], Dict[int, Block]]:
     blocks = {}
     for block_data in response:
         page_id = block_data["page"]["id"]
+        is_page_property = block_data.get("preBlock?", False)
         block = Block(
             id=block_data["id"],
             content=block_data["content"],
             parent_id=block_data["parent"]["id"],
             left_id=block_data["left"]["id"],
             page_id=page_id,
-            properties=block_data.get("properties", {})
+            properties=block_data.get("properties", {}),
+            is_page_property=is_page_property
         )
         blocks[block.id] = block
     
@@ -139,7 +143,7 @@ def clean_response(response: List[dict]) -> Tuple[List[Page], Dict[int, Block]]:
 
 def extract_properties(blocks: Dict[int, Block]) -> Tuple[List[str], Dict[int, Block]]:
     """
-    Separate properties from regular blocks in the input dictionary.
+    Separate page-level properties from regular blocks in the input dictionary.
     
     Args:
         blocks: Dictionary mapping block IDs to Block objects
@@ -147,13 +151,13 @@ def extract_properties(blocks: Dict[int, Block]) -> Tuple[List[str], Dict[int, B
     Returns:
         A tuple containing:
         - List of property strings in the format "key:: value"
-        - Dictionary of remaining blocks that are not properties
+        - Dictionary of remaining blocks that are not page-level properties
     """
     properties = []
     remaining_blocks = {}
     
     for block_id, block in blocks.items():
-        if block.properties:
+        if block.is_page_property and block.properties:
             # Convert properties to the format "key:: value"
             for key, values in block.properties.items():
                 if isinstance(values, list):
@@ -164,7 +168,7 @@ def extract_properties(blocks: Dict[int, Block]) -> Tuple[List[str], Dict[int, B
         else:
             remaining_blocks[block_id] = block
     
-    return properties, remaining_blocks 
+    return properties, remaining_blocks
 
 def reorganize_blocks(blocks: Dict[int, Block], parent_id: int) -> List[Block]:
     """
@@ -244,6 +248,21 @@ def format_block(block: Block, level: int = 0) -> str:
         result.append(f"{indent}  {lines[-1]}")
     else:
         result.append(f"{indent}- {block.content}")
+    
+    # Add block properties if present
+    if block.properties:
+        props_indent = "  " * (level + 1)
+        props_parts = []
+        
+        for key, values in block.properties.items():
+            if isinstance(values, list):
+                value = ", ".join(values)
+            else:
+                value = str(values)
+            props_parts.append(f"{key}:: {value}")
+        
+        if props_parts:
+            result.append(f"{props_indent}properties: {', '.join(props_parts)}")
     
     # Format children
     for child in block.children:
