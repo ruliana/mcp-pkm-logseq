@@ -22,6 +22,13 @@ The project consists of:
 - Build package: `uv build`
 - Publish package: `uv publish`
 
+## Claude Code Task Management
+Use these Claude Code slash commands to manage task documentation:
+- `/project:new-task "Task Title"` - Create a new task.md with comprehensive context
+- `/project:archive-task [optional-component]` - Archive current task.md to the tasks directory
+- `/project:use-task-context [search-terms]` - Find relevant context from past tasks
+- `/project:list-tasks [optional-component]` - List all archived tasks with filtering
+
 ## Project Structure
 - `server.py`: Main MCP server with:
   - `guide()`: Resource showing initial instructions
