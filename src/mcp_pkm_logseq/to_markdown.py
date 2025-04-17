@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Tuple, List, Any, Set
+from typing import Dict, Optional, Tuple, List, Any, Set, Callable, Protocol
 
 @dataclass
 class Page:
@@ -30,8 +30,33 @@ class Block:
     is_page_property: bool = False
     # List of child blocks
     children: List['Block'] = field(default_factory=list)
+
+# ============================================================================
+# Property Handling - Functional Approach
+# ============================================================================
+
+def format_property_default(key: str, value: Any) -> str:
+    """
+    Format a property key-value pair using default Logseq style (key:: value).
     
-def page_to_markdown(response: List[Dict[str, Any]]) -> str:
+    Args:
+        key: The property key
+        value: The property value (can be a list, string, or other type)
+        
+    Returns:
+        Formatted property string in the format "key:: value"
+    """
+    if isinstance(value, list):
+        formatted_value = ", ".join(str(v) for v in value)
+    else:
+        formatted_value = str(value)
+    return f"{key}:: {formatted_value}"
+
+def page_to_markdown(
+    response: List[Dict[str, Any]], 
+    property_filter: Callable[[Block], bool] = lambda block: block.is_page_property and block.properties,
+    format_property: Callable[[str, Any], str] = format_property_default
+) -> str:
     """
     Convert a Logseq API response to Markdown.
     
@@ -40,6 +65,10 @@ def page_to_markdown(response: List[Dict[str, Any]]) -> str:
     
     Args:
         response: The raw response from the Logseq API
+        property_filter: Function to determine which blocks to extract properties from
+                        (defaults to extracting only page-level properties)
+        format_property: Function to format property key-value pairs
+                        (defaults to format_property_default)
         
     Returns:
         A formatted Markdown string representation of the page(s). When multiple
@@ -55,6 +84,14 @@ def page_to_markdown(response: List[Dict[str, Any]]) -> str:
         - Block 1
           - Nested block
         - Block 2
+        
+    Advanced Example with Custom Formatting:
+        >>> api_response = get_logseq_page("My Page")
+        >>> def custom_format(key, value):
+        ...     if isinstance(value, list):
+        ...         return f"{key}: [{', '.join(value)}]"
+        ...     return f"{key}: {value}"
+        >>> markdown = page_to_markdown(api_response, format_property=custom_format)
     """
     if not response:
         return ""
@@ -62,23 +99,98 @@ def page_to_markdown(response: List[Dict[str, Any]]) -> str:
     # Process the response into our data model
     pages, blocks = clean_response(response)
     
-    # If there's only one page, convert it to Markdown
+    # Define a function to convert a page to markdown
+    def convert_page_to_markdown(page: Page, page_blocks: Dict[int, Block]) -> str:
+        return build_markdown(page, page_blocks, property_filter, format_property)
+    
+    # Apply the transformation pipeline
     if len(pages) == 1:
-        return build_markdown(pages[0], blocks)
+        # If there's only one page, convert it to Markdown
+        return convert_page_to_markdown(pages[0], blocks)
+    else:
+        # If there are multiple pages:
+        # 1. Sort pages by id in reverse order (newer pages first)
+        sorted_pages = sorted(pages, key=lambda p: p.id, reverse=True)
+        
+        # 2. For each page, filter blocks and convert to markdown
+        results = []
+        for page in sorted_pages:
+            # Filter blocks for this page (functional filter operation)
+            page_blocks = {
+                block_id: block for block_id, block in blocks.items() 
+                if block.page_id == page.id
+            }
+            results.append(convert_page_to_markdown(page, page_blocks))
+        
+        # 3. Join the results
+        return "\n\n".join(results)
+
+def create_page_from_block_data(block_data: dict) -> Tuple[int, Page]:
+    """
+    Create a Page object from a block's page data.
     
-    # If there are multiple pages, sort them by id in reverse order (larger ids first),
-    # which places newer pages before older ones, then convert each page to Markdown and join them
-    results = []
-    sorted_pages = sorted(pages, key=lambda p: p.id, reverse=True)
-    for page in sorted_pages:
-        # Filter blocks for this page
-        page_blocks = {
-            block_id: block for block_id, block in blocks.items() 
-            if block.page_id == page.id
-        }
-        results.append(build_markdown(page, page_blocks))
+    Args:
+        block_data: Dictionary containing block data from the Logseq API
+        
+    Returns:
+        A tuple containing:
+        - Page ID
+        - Page object created from the block data
+    """
+    page_data = block_data["page"]
+    page_id = page_data["id"]
     
-    return "\n\n".join(results)
+    return page_id, Page(
+        id=page_id,
+        name=page_data["name"],
+        original_name=page_data["originalName"]
+    )
+
+def create_block_from_data(block_data: dict) -> Tuple[int, Block]:
+    """
+    Create a Block object from a block data dictionary.
+    
+    Args:
+        block_data: Dictionary containing block data from the Logseq API
+        
+    Returns:
+        A tuple containing:
+        - Block ID
+        - Block object created from the data
+    """
+    page_id = block_data["page"]["id"]
+    is_page_property = block_data.get("preBlock?", False)
+    block_id = block_data["id"]
+    
+    block = Block(
+        id=block_id,
+        content=block_data["content"],
+        parent_id=block_data["parent"]["id"],
+        left_id=block_data["left"]["id"],
+        page_id=page_id,
+        properties=block_data.get("properties", {}),
+        is_page_property=is_page_property
+    )
+    
+    return block_id, block
+
+def track_page_order(response: List[dict]) -> List[int]:
+    """
+    Track the order of pages as they appear in the response.
+    Uses dict as an ordered set to preserve insertion order while eliminating duplicates.
+    
+    Args:
+        response: List of dictionaries from the Logseq API response
+        
+    Returns:
+        List of page IDs in the order they appear in the response
+    """
+    # Use dict.fromkeys to maintain insertion order while eliminating duplicates
+    seen_page_ids = dict.fromkeys(
+        block_data["page"]["id"] for block_data in response
+    )
+    
+    return list(seen_page_ids)
 
 def clean_response(response: List[dict]) -> Tuple[List[Page], Dict[int, Block]]:
     """
@@ -99,48 +211,78 @@ def clean_response(response: List[dict]) -> Tuple[List[Page], Dict[int, Block]]:
     if not response:
         raise IndexError("Empty response")
     
-    # Group blocks by page ID and create Page objects
+    # Extract pages from response
     pages_dict = {}
-    
     for block_data in response:
-        page_data = block_data["page"]
-        page_id = page_data["id"]
-        
-        # Create Page object if we haven't seen this page before
+        page_id, page = create_page_from_block_data(block_data)
         if page_id not in pages_dict:
-            pages_dict[page_id] = Page(
-                id=page_id,
-                name=page_data["name"],
-                original_name=page_data["originalName"]
-            )
+            pages_dict[page_id] = page
     
     # Convert each block into a Block object
     blocks = {}
     for block_data in response:
-        page_id = block_data["page"]["id"]
-        is_page_property = block_data.get("preBlock?", False)
-        block = Block(
-            id=block_data["id"],
-            content=block_data["content"],
-            parent_id=block_data["parent"]["id"],
-            left_id=block_data["left"]["id"],
-            page_id=page_id,
-            properties=block_data.get("properties", {}),
-            is_page_property=is_page_property
-        )
-        blocks[block.id] = block
+        block_id, block = create_block_from_data(block_data)
+        blocks[block_id] = block
     
-    # Convert pages dictionary to list, ordered by appearance in response
-    seen_page_ids = []
-    for block_data in response:
-        page_id = block_data["page"]["id"]
-        if page_id not in seen_page_ids:
-            seen_page_ids.append(page_id)
+    # Track page order
+    seen_page_ids = track_page_order(response)
     
+    # Convert pages dictionary to ordered list
     pages = [pages_dict[page_id] for page_id in seen_page_ids]
     
-    return pages, blocks 
+    return pages, blocks
 
+# ============================================================================
+# Property Handling - Functional Approach
+# ============================================================================
+
+def extract_properties_func(
+    blocks: Dict[int, Block],
+    property_filter: Callable[[Block], bool] = lambda block: block.is_page_property and block.properties,
+    format_property: Callable[[str, Any], str] = format_property_default,
+    remove_extracted: bool = True  # Add a flag to control whether to remove extracted blocks
+) -> Tuple[List[str], Dict[int, Block]]:
+    """
+    Functional approach to extract properties from blocks based on a filter.
+    
+    Args:
+        blocks: Dictionary mapping block IDs to Block objects
+        property_filter: Function to determine which blocks to extract properties from
+                        (defaults to extracting only page-level properties)
+        format_property: Function to format property key-value pairs
+                        (defaults to format_property_default)
+        remove_extracted: Whether to remove blocks that match the filter from the remaining blocks
+                         (defaults to True)
+        
+    Returns:
+        A tuple containing:
+        - List of property strings formatted according to the format_property function
+        - Dictionary of remaining blocks after filtering
+    """
+    properties = []
+    remaining_blocks = {}
+    
+    for block_id, block in blocks.items():
+        matched = property_filter(block)
+        should_remove = False
+        
+        if matched:
+            # Extract and format properties
+            if block.properties:
+                for key, value in block.properties.items():
+                    properties.append(format_property(key, value))
+            
+            # Determine if this block should be removed from remaining blocks
+            if remove_extracted:
+                should_remove = True
+        
+        # Only add to remaining blocks if we shouldn't remove it
+        if not should_remove:
+            remaining_blocks[block_id] = block
+    
+    return properties, remaining_blocks
+
+# For backward compatibility
 def extract_properties(blocks: Dict[int, Block]) -> Tuple[List[str], Dict[int, Block]]:
     """
     Separate page-level properties from regular blocks in the input dictionary.
@@ -153,22 +295,69 @@ def extract_properties(blocks: Dict[int, Block]) -> Tuple[List[str], Dict[int, B
         - List of property strings in the format "key:: value"
         - Dictionary of remaining blocks that are not page-level properties
     """
-    properties = []
-    remaining_blocks = {}
+    return extract_properties_func(blocks)
+
+def find_direct_children(blocks: Dict[int, Block], parent_id: int) -> List[Block]:
+    """
+    Find all direct children of a given parent block using functional filtering.
     
-    for block_id, block in blocks.items():
-        if block.is_page_property and block.properties:
-            # Convert properties to the format "key:: value"
-            for key, values in block.properties.items():
-                if isinstance(values, list):
-                    value = ", ".join(values)
-                else:
-                    value = str(values)
-                properties.append(f"{key}:: {value}")
-        else:
-            remaining_blocks[block_id] = block
+    Args:
+        blocks: Dictionary mapping block IDs to Block objects
+        parent_id: ID of the parent block
+        
+    Returns:
+        List of Block objects that are direct children of the specified parent
+    """
+    return [block for block in blocks.values() if block.parent_id == parent_id]
+
+def find_first_block(children: List[Block], parent_id: int) -> Optional[Block]:
+    """
+    Find the first block in a sequence (the one with left_id == parent_id).
     
-    return properties, remaining_blocks
+    Args:
+        children: List of blocks to search through
+        parent_id: ID of the parent block, which should match left_id of the first block
+        
+    Returns:
+        The first block, or None if not found
+    """
+    for child in children:
+        if child.left_id == parent_id:
+            return child
+    return None
+
+def chain_blocks(children: List[Block], first_block: Block) -> List[Block]:
+    """
+    Chain blocks together by following left_id references.
+    
+    Args:
+        children: List of blocks to chain
+        first_block: The first block in the chain
+        
+    Returns:
+        Ordered list of blocks
+    """
+    sorted_children = [first_block]
+    current_id = first_block.id
+    remaining_children = [child for child in children if child.id != first_block.id]
+    
+    # Follow the left_id chain to order blocks
+    while remaining_children:
+        found_next = False
+        for i, child in enumerate(remaining_children):
+            if child.left_id == current_id:
+                sorted_children.append(child)
+                current_id = child.id
+                remaining_children.pop(i)
+                found_next = True
+                break
+        
+        # If chain is broken, add remaining blocks in any order
+        if not found_next:
+            sorted_children.extend(remaining_children)
+            break
+    
+    return sorted_children
 
 def reorganize_blocks(blocks: Dict[int, Block], parent_id: int) -> List[Block]:
     """
@@ -182,56 +371,67 @@ def reorganize_blocks(blocks: Dict[int, Block], parent_id: int) -> List[Block]:
         List of Block objects that are direct children of the specified parent,
         with their children recursively organized
     """
-    # Find all blocks that are direct children of the parent
-    children = []
-    for block in blocks.values():
-        if block.parent_id == parent_id:
-            children.append(block)
+    # Step 1: Find direct children of this parent
+    children = find_direct_children(blocks, parent_id)
     
     if not children:
         return []
     
-    # Sort children by following the left_id chain
-    sorted_children = []
-    current_id = parent_id
+    # Step 2: Find the first block in the sequence
+    first_block = find_first_block(children, parent_id)
     
-    # Find the first block (the one with left_id == parent_id)
-    for child in children:
-        if child.left_id == current_id:
-            sorted_children.append(child)
-            current_id = child.id
-            break
+    # Step 3: Sort children by following the left_id chain
+    if first_block:
+        sorted_children = chain_blocks(children, first_block)
+    else:
+        # If we can't find a proper first block, use original order
+        sorted_children = children
     
-    # Sort remaining blocks by following the left_id chain
-    while len(sorted_children) < len(children):
-        found_next = False
-        for child in children:
-            if child not in sorted_children and child.left_id == current_id:
-                sorted_children.append(child)
-                current_id = child.id
-                found_next = True
-                break
-        
-        if not found_next:
-            # If we can't find the next block in the chain, add remaining blocks in any order
-            for child in children:
-                if child not in sorted_children:
-                    sorted_children.append(child)
-            break
-    
-    # Recursively organize children of each block
+    # Step 4: Recursively organize children of each block
     for child in sorted_children:
         child.children = reorganize_blocks(blocks, child.id)
     
     return sorted_children
 
-def format_block(block: Block, level: int = 0) -> str:
+def format_block_properties(
+    properties: Dict[str, Any], 
+    indent: str, 
+    format_property: Callable[[str, Any], str] = format_property_default
+) -> Optional[str]:
+    """
+    Format block properties using a functional approach.
+    
+    Args:
+        properties: Dictionary of property key-value pairs
+        indent: Indentation string
+        format_property: Function to format property key-value pairs
+                        (defaults to format_property_default)
+    
+    Returns:
+        Formatted properties string or None if no properties
+    """
+    if not properties:
+        return None
+        
+    props_parts = [format_property(key, value) for key, value in properties.items()]
+    
+    if props_parts:
+        return f"{indent}properties: {', '.join(props_parts)}"
+    return None
+
+def format_block(
+    block: Block, 
+    level: int = 0, 
+    format_property: Callable[[str, Any], str] = format_property_default
+) -> str:
     """
     Format a single block to markdown with proper indentation.
     
     Args:
         block: The block to format
         level: The indentation level (number of spaces)
+        format_property: Function to format property key-value pairs
+                        (defaults to format_property_default)
         
     Returns:
         Formatted markdown string for the block and its children
@@ -250,32 +450,28 @@ def format_block(block: Block, level: int = 0) -> str:
         result.append(f"{indent}- {block.content}")
     
     # Add block properties if present
-    if block.properties:
-        props_indent = "  " * (level + 1)
-        props_parts = []
-        
-        for key, values in block.properties.items():
-            if isinstance(values, list):
-                value = ", ".join(values)
-            else:
-                value = str(values)
-            props_parts.append(f"{key}:: {value}")
-        
-        if props_parts:
-            result.append(f"{props_indent}properties: {', '.join(props_parts)}")
+    props_indent = "  " * (level + 1)
+    properties_str = format_block_properties(block.properties, props_indent, format_property)
+    if properties_str:
+        result.append(properties_str)
     
     # Format children
     for child in block.children:
-        result.append(format_block(child, level + 1))
+        result.append(format_block(child, level + 1, format_property))
     
     return "\n".join(result)
 
-def format_blocks(blocks: List[Block]) -> str:
+def format_blocks(
+    blocks: List[Block], 
+    format_property: Callable[[str, Any], str] = format_property_default
+) -> str:
     """
     Format a list of blocks to markdown.
     
     Args:
         blocks: List of Block objects to format
+        format_property: Function to format property key-value pairs
+                        (defaults to format_property_default)
         
     Returns:
         Formatted markdown string
@@ -283,38 +479,50 @@ def format_blocks(blocks: List[Block]) -> str:
     if not blocks:
         return ""
     
-    result = []
-    for block in blocks:
-        result.append(format_block(block))
+    # Use functional map to transform blocks to markdown strings
+    result = [format_block(block, format_property=format_property) for block in blocks]
     
     return "\n".join(result) + "\n"
 
-def build_markdown(page: Page, blocks: Dict[int, Block]) -> str:
+def build_markdown(
+    page: Page, 
+    blocks: Dict[int, Block],
+    property_filter: Callable[[Block], bool] = lambda block: block.is_page_property and block.properties,
+    format_property: Callable[[str, Any], str] = format_property_default
+) -> str:
     """
     Build the final markdown output from a page and its blocks.
     
     Args:
         page: The Page object containing page metadata
         blocks: Dictionary mapping block IDs to Block objects
+        property_filter: Function to determine which blocks to extract properties from
+                        (defaults to extracting only page-level properties)
+        format_property: Function to format property key-value pairs
+                        (defaults to format_property_default)
         
     Returns:
         Formatted markdown string with page title, properties, and block hierarchy
     """
-    # Start with the page title
+    # Pipeline of transformations:
+    # 1. Start with the page title
     result = [f"# {page.original_name}", ""]
     
-    # Extract and format properties
-    properties, remaining_blocks = extract_properties(blocks)
+    # 2. Extract and format properties
+    properties, remaining_blocks = extract_properties_func(blocks, property_filter, format_property)
     if properties:
         result.append("properties:")
         for prop in properties:
             result.append(f"- {prop}")
         result.append("")
     
-    # Reorganize and format blocks
+    # 3. Reorganize blocks into hierarchical structure
     reorganized_blocks = reorganize_blocks(remaining_blocks, page.id)
-    block_markdown = format_blocks(reorganized_blocks)
+    
+    # 4. Format blocks to markdown
+    block_markdown = format_blocks(reorganized_blocks, format_property)
     if block_markdown:
         result.append(block_markdown)
     
+    # 5. Join everything into a single string
     return "\n".join(result) 

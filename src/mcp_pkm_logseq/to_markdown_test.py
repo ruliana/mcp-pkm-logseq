@@ -10,6 +10,7 @@ from .to_markdown import (
     Page,
     Block,
 )
+from typing import Dict, List, Tuple, Any, Callable
 
 
 @pytest.fixture
@@ -353,8 +354,70 @@ def test_pages_sorted_by_id_reverse_order(pages_sorted_by_id_response):
     assert high_pos < medium_pos < low_pos, "Pages are not sorted by id in reverse order"
 
 # ============================================================================
-# clean_response Tests
+# clean_response Tests and Helper Functions
 # ============================================================================
+
+def test_create_page_from_block_data():
+    """Test that create_page_from_block_data correctly creates a Page object from block data."""
+    from .to_markdown import create_page_from_block_data
+    
+    block_data = {
+        "page": {
+            "id": 123,
+            "name": "test-page",
+            "originalName": "Test Page"
+        }
+    }
+    
+    page_id, page = create_page_from_block_data(block_data)
+    
+    assert page_id == 123
+    assert isinstance(page, Page)
+    assert page.id == 123
+    assert page.name == "test-page"
+    assert page.original_name == "Test Page"
+
+def test_create_block_from_data():
+    """Test that create_block_from_data correctly creates a Block object from block data."""
+    from .to_markdown import create_block_from_data
+    
+    block_data = {
+        "id": 456,
+        "content": "Test block content",
+        "parent": {"id": 123},
+        "left": {"id": 789},
+        "page": {"id": 100},
+        "properties": {"key": "value"},
+        "preBlock?": True
+    }
+    
+    block_id, block = create_block_from_data(block_data)
+    
+    assert block_id == 456
+    assert isinstance(block, Block)
+    assert block.id == 456
+    assert block.content == "Test block content"
+    assert block.parent_id == 123
+    assert block.left_id == 789
+    assert block.page_id == 100
+    assert block.properties == {"key": "value"}
+    assert block.is_page_property is True
+
+def test_track_page_order():
+    """Test that track_page_order correctly tracks the order of pages in the response."""
+    from .to_markdown import track_page_order
+    
+    response = [
+        {"page": {"id": 100}},
+        {"page": {"id": 200}},
+        {"page": {"id": 100}},  # Duplicate
+        {"page": {"id": 300}}
+    ]
+    
+    page_ids = track_page_order(response)
+    
+    assert page_ids == [100, 200, 300]
+    assert len(page_ids) == 3  # No duplicates
 
 def test_clean_response(example_response):
     """Test that clean_response correctly converts the API response into Page and Block objects."""
@@ -482,8 +545,90 @@ def test_extract_properties_no_properties():
     assert remaining_blocks == blocks
 
 # ============================================================================
-# reorganize_blocks Tests
+# reorganize_blocks Tests and Helper Functions
 # ============================================================================
+
+def test_find_direct_children():
+    """Test that find_direct_children correctly identifies direct children of a parent."""
+    from .to_markdown import find_direct_children
+    
+    blocks = {
+        1: Block(id=1, content="Root", parent_id=0, left_id=0, page_id=0),
+        2: Block(id=2, content="Child 1", parent_id=1, left_id=1, page_id=0),
+        3: Block(id=3, content="Child 2", parent_id=1, left_id=2, page_id=0),
+        4: Block(id=4, content="Grandchild", parent_id=2, left_id=2, page_id=0),
+        5: Block(id=5, content="Another Root", parent_id=0, left_id=1, page_id=0),
+    }
+    
+    # Find children of root
+    children = find_direct_children(blocks, 0)
+    
+    assert len(children) == 2
+    assert all(block.parent_id == 0 for block in children)
+    assert 1 in [block.id for block in children]
+    assert 5 in [block.id for block in children]
+    
+    # Find children of Block 1
+    children = find_direct_children(blocks, 1)
+    
+    assert len(children) == 2
+    assert all(block.parent_id == 1 for block in children)
+    assert 2 in [block.id for block in children]
+    assert 3 in [block.id for block in children]
+
+def test_find_first_block():
+    """Test that find_first_block correctly identifies the first block in a chain."""
+    from .to_markdown import find_first_block
+    
+    blocks = [
+        Block(id=1, content="First", parent_id=0, left_id=0, page_id=0),
+        Block(id=2, content="Second", parent_id=0, left_id=1, page_id=0),
+        Block(id=3, content="Not first", parent_id=0, left_id=2, page_id=0),
+    ]
+    
+    first = find_first_block(blocks, 0)
+    assert first is not None
+    assert first.id == 1
+    
+    # Test with no first block
+    blocks = [
+        Block(id=1, content="Not first", parent_id=0, left_id=99, page_id=0),
+        Block(id=2, content="Also not first", parent_id=0, left_id=88, page_id=0),
+    ]
+    
+    first = find_first_block(blocks, 0)
+    assert first is None
+
+def test_chain_blocks():
+    """Test that chain_blocks correctly orders blocks by following left_id references."""
+    from .to_markdown import chain_blocks
+    
+    blocks = [
+        Block(id=1, content="First", parent_id=0, left_id=0, page_id=0),
+        Block(id=2, content="Second", parent_id=0, left_id=1, page_id=0),
+        Block(id=3, content="Third", parent_id=0, left_id=2, page_id=0),
+    ]
+    
+    # Start chaining from the first block
+    sorted_blocks = chain_blocks(blocks, blocks[0])
+    
+    assert len(sorted_blocks) == 3
+    assert [block.id for block in sorted_blocks] == [1, 2, 3]
+    
+    # Test with broken chain
+    blocks = [
+        Block(id=1, content="First", parent_id=0, left_id=0, page_id=0),
+        Block(id=2, content="Second", parent_id=0, left_id=1, page_id=0),
+        Block(id=3, content="Disconnected", parent_id=0, left_id=99, page_id=0),
+    ]
+    
+    sorted_blocks = chain_blocks(blocks, blocks[0])
+    
+    assert len(sorted_blocks) == 3
+    # The first two should be in order, but the third might be anywhere
+    assert sorted_blocks[0].id == 1
+    assert sorted_blocks[1].id == 2
+    assert 3 in [block.id for block in sorted_blocks]
 
 def test_reorganize_blocks():
     """Test that reorganize_blocks correctly builds the block hierarchy."""
@@ -657,6 +802,27 @@ def test_reorganize_blocks_cyclic_references():
 # format_block and format_blocks Tests
 # ============================================================================
 
+def test_format_block_properties():
+    """Test that format_block_properties correctly formats block properties."""
+    from .to_markdown import format_block_properties
+    
+    # Test with standard properties
+    properties = {"status": "active", "tags": ["test", "example"]}
+    result = format_block_properties(properties, "  ")
+    assert result == "  properties: status:: active, tags:: test, example"
+    
+    # Test with empty properties
+    assert format_block_properties({}, "  ") is None
+    
+    # Test with custom formatter
+    def custom_formatter(key: str, value: Any) -> str:
+        if isinstance(value, list):
+            return f"{key}=({', '.join(str(v) for v in value)})"
+        return f"{key}={value}"
+    
+    result = format_block_properties(properties, "  ", custom_formatter)
+    assert result == "  properties: status=active, tags=(test, example)"
+
 def test_format_block():
     """Test that format_block correctly formats a single block with proper indentation."""
     block = Block(
@@ -760,6 +926,77 @@ def test_format_blocks_empty():
     """Test that format_blocks handles empty input correctly."""
     result = format_blocks([])
     assert result == ""
+
+# ============================================================================
+# Property Handling Tests
+# ============================================================================
+
+def test_property_formatter():
+    """Test that different property formatters can be created and used."""
+    from .to_markdown import format_property_default
+    
+    # Test default formatter
+    assert format_property_default("key", ["value1", "value2"]) == "key:: value1, value2"
+    assert format_property_default("key", "single_value") == "key:: single_value"
+    assert format_property_default("key", 123) == "key:: 123"
+    
+    # Test custom formatter
+    def custom_formatter(key: str, value: Any) -> str:
+        if isinstance(value, list):
+            return f"{key}: [{', '.join(str(v) for v in value)}]"
+        return f"{key}: {value}"
+    
+    assert custom_formatter("key", ["value1", "value2"]) == "key: [value1, value2]"
+    assert custom_formatter("key", "single_value") == "key: single_value"
+    assert custom_formatter("key", 123) == "key: 123"
+
+def test_property_extractor():
+    """Test that property extractor extracts properties correctly."""
+    from .to_markdown import extract_properties_func
+    
+    # Test data
+    blocks = {
+        1: Block(id=1, content="Regular content", parent_id=0, left_id=0, page_id=0),
+        2: Block(
+            id=2,
+            content="alias:: test\nauthor:: [[Ronie Uliana]]",
+            parent_id=0,
+            left_id=1,
+            page_id=0,
+            properties={"alias": ["test"], "author": ["Ronie Uliana"]},
+            is_page_property=True,
+        ),
+        3: Block(
+            id=3, 
+            content="Regular with props", 
+            parent_id=0, 
+            left_id=2, 
+            page_id=0,
+            properties={"status": "active"},
+        )
+    }
+    
+    # Default behavior - extract page properties only
+    props, remaining = extract_properties_func(blocks)
+    assert len(props) == 2
+    assert "alias:: test" in props
+    assert "author:: Ronie Uliana" in props
+    assert len(remaining) == 2  # Block 2 is removed, 1 and 3 remain
+    
+    # Custom filter to extract all properties
+    def extract_all(block: Block) -> bool:
+        return block.properties is not None and len(block.properties) > 0
+    
+    # When remove_extracted=True, both blocks with properties are removed
+    props, remaining = extract_properties_func(blocks, property_filter=extract_all, remove_extracted=True)
+    assert len(props) == 3  # Includes all properties (alias, author, status)
+    assert "status:: active" in props
+    assert len(remaining) == 1  # Only one block without properties
+    
+    # When remove_extracted=False, all blocks remain
+    props, remaining = extract_properties_func(blocks, property_filter=extract_all, remove_extracted=False)
+    assert len(props) == 3  # Still includes all properties
+    assert len(remaining) == 3  # All blocks remain
 
 # ============================================================================
 # build_markdown Tests
